@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 
 type Color = "green" | "red" | "yellow" | "blue";
 type GameState = "idle" | "showing" | "waiting" | "gameover";
@@ -69,6 +69,89 @@ function playTone(frequency: number, duration: number = 0.3) {
   }
 }
 
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  color: string;
+  size: number;
+  life: number;
+}
+
+function Confetti({ active }: { active: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const particlesRef = useRef<Particle[]>([]);
+  const animRef = useRef<number>(0);
+
+  const confettiColors = useMemo(
+    () => ["#34d399", "#60a5fa", "#f87171", "#fbbf24", "#a78bfa", "#fb923c"],
+    []
+  );
+
+  useEffect(() => {
+    if (!active || !canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const particles: Particle[] = [];
+    for (let i = 0; i < 120; i++) {
+      particles.push({
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        vx: (Math.random() - 0.5) * 16,
+        vy: (Math.random() - 0.5) * 16 - 4,
+        color: confettiColors[Math.floor(Math.random() * confettiColors.length)],
+        size: Math.random() * 6 + 3,
+        life: 1,
+      });
+    }
+    particlesRef.current = particles;
+
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      let alive = false;
+
+      for (const p of particlesRef.current) {
+        if (p.life <= 0) continue;
+        alive = true;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.3;
+        p.life -= 0.012;
+        p.vx *= 0.99;
+
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size * 0.6);
+      }
+
+      ctx.globalAlpha = 1;
+      if (alive) {
+        animRef.current = requestAnimationFrame(animate);
+      }
+    };
+
+    animRef.current = requestAnimationFrame(animate);
+
+    return () => cancelAnimationFrame(animRef.current);
+  }, [active, confettiColors]);
+
+  if (!active) return null;
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 pointer-events-none z-50"
+    />
+  );
+}
+
 function playErrorSound() {
   try {
     const ctx = new (window.AudioContext ||
@@ -102,6 +185,7 @@ export default function SimonGame() {
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [speed, setSpeed] = useState<"normal" | "fast" | "insane">("normal");
+  const [showConfetti, setShowConfetti] = useState(false);
   const isPlayingRef = useRef(false);
 
   const speedMs: Record<string, number> = {
@@ -190,6 +274,8 @@ export default function SimonGame() {
           if (newScore > highScore) {
             setHighScore(newScore);
             localStorage.setItem("simon-high-score", newScore.toString());
+            setShowConfetti(true);
+            setTimeout(() => setShowConfetti(false), 2500);
           }
 
           setTimeout(() => nextRound(sequence), 600);
@@ -206,6 +292,7 @@ export default function SimonGame() {
 
   return (
     <div className="flex flex-col items-center gap-8">
+      <Confetti active={showConfetti} />
       {/* Score display */}
       <div className="flex flex-col items-center gap-2">
         <div className="flex gap-8 text-center">
@@ -222,8 +309,11 @@ export default function SimonGame() {
             <p className="text-xs uppercase tracking-widest text-zinc-500">
               Best
             </p>
-            <p className="text-4xl font-bold text-zinc-400 tabular-nums">
+            <p className={`text-4xl font-bold tabular-nums transition-colors duration-300 ${
+              showConfetti ? "text-yellow-300" : "text-zinc-400"
+            }`}>
               {highScore}
+              {showConfetti && <span className="ml-1 text-lg">NEW!</span>}
             </p>
           </div>
         </div>
