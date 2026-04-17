@@ -1,3 +1,4 @@
 [build]
+  base = "simon-game"
   command = "npm run build"
-  publish = "out"
+  publish = "simon-game/out"
